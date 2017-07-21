@@ -18,14 +18,21 @@ from nltk.stem.wordnet import WordNetLemmatizer
 
 wp_tokenizer = WordPunctTokenizer()			# Tokenizer instance
 wnl_lemmatizer = WordNetLemmatizer()		# Wordnet Lemmatizer instance
-stop_words = stopwords.words('english')		# English stop words list
+
+# English stop words list to set
+stop_words = set(stopwords.words('english'))
+
 inverted_file = {}							# The Inverted File data structure
 
 total_doc_cnt = 0							# Total number of indexed documents
 indexed_words = 0							# Total (corpus) number of indexed terms
 excluded_words = 0							# Total (corpus) number of exluded terms
 
-
+# closed tag set http://www.infogistics.com/tagset.html
+CLOSED_TAGS = {'CD', 'CC', 'DT', 'EX', 'IN',
+			   'LS', 'MD', 'PDT', 'POS', 'PRP',
+			   'PRP$', 'RP', 'TO', 'UH', 'WDT',
+			   'WP', 'WP$', 'WRB'}
 
 def set_argParser():
 	""" The build_index script's arguments presentation method."""
@@ -107,12 +114,12 @@ def update_inverted_index(existing_lemmas):
 
 
 
-
-
 if (__name__ == "__main__") :
 	argParser = set_argParser()				# The argument parser instance
 	line_args = check_arguments(argParser)	# Check and redefine, if necessary, the given line arguments 
-
+	
+	pattern = re.compile(r'[\W_]+')			#compile pattern once, use it every time (If includes a non-letter character)
+	
 	# -------------------------------------------------------------------------------
 	# Text File Parsing
 	# -----------------
@@ -131,26 +138,15 @@ if (__name__ == "__main__") :
 			word_cnt = 0 		# Our inverted index would map words to document names but, we also want to support phrase queries: queries for not only words, but words in a specific sequence => We need to know the order of appearance.
 
 			for line in fh:
-				for word, pos in pos_tag(wp_tokenizer.tokenize(line.lower().strip())):
-					if(
-						re.search(r'[\W_]+', word) or 	# If includes a non-letter character
-						word in stop_words or			# If this is a stop word
-						# http://stackoverflow.com/questions/15388831/what-are-all-possible-pos-tags-of-nltk
-						#   CC: conjuction, coordinating
-						#   LS: List item marker
-						#   EX: Existential there
-						#   MD: Modal auxiliary
-						#  PDT: Pre-determined
-						#  PRP: Pronoun, personal
-						# PRP$: Pronoun, possesive
-						#  WDT: WH-determiner
-						#   WP: WH-pronoun
-						#  WRB: Wh-adverb
-						pos in ['CC', 'LS', 'EX', 'MD', 'PDT', 'PRP', 'PRP$', 'WDT', 'WP', 'WRB']
+				for word, pos in pos_tag(wp_tokenizer.tokenize(line.lower().strip())):					
+					if (
+						pos in CLOSED_TAGS or				# search the closed tag set O(1)
+						pattern.search(word) or				# If includes a non-letter character
+						word in stop_words					# search for stop words O(1)
 					):
 						excluded_words += 1
 						continue
-
+					
 					pos = 'v' if (pos.startswith('VB')) else 'n'	# If current term's appearance is verb related then the POS lemmatizer should be verb ('v'), otherwise ('n')
 					lemma = wnl_lemmatizer.lemmatize(word, pos)		# Stemming/Lemmatization
 
