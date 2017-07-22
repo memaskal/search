@@ -9,7 +9,7 @@ import json
 import time
 import argparse
 
-from multiprocessing import Pool, Manager	# Multiprocessing
+from multiprocessing import Pool, Manager				# Multiprocessing
 
 from nltk import pos_tag
 from nltk.corpus import stopwords
@@ -21,15 +21,15 @@ from nltk.stem.wordnet import WordNetLemmatizer
 stop_words = set(stopwords.words('english'))
 
 # shared memory objects
-inverted_file = {}							# The Inverted File data structure
+inverted_file = {}										# The Inverted File data structure
 inv_lock = None
 
-wp_tokenizer = WordPunctTokenizer()			# Tokenizer instance
-wnl_lemmatizer = WordNetLemmatizer()		# Wordnet Lemmatizer instance
+wp_tokenizer = WordPunctTokenizer()						# Tokenizer instance
+wnl_lemmatizer = WordNetLemmatizer()					# Wordnet Lemmatizer instance
 
-total_doc_cnt = 0							# Total number of indexed documents
-indexed_words = 0							# Total (corpus) number of indexed terms
-excluded_words = 0							# Total (corpus) number of exluded terms
+total_doc_cnt = 0										# Total number of indexed documents
+indexed_words = 0										# Total (corpus) number of indexed terms
+excluded_words = 0										# Total (corpus) number of exluded terms
 
 # closed tag set http://www.infogistics.com/tagset.html
 CLOSED_TAGS = {'CD', 'CC', 'DT', 'EX', 'IN', 'LS', 'MD', 'PDT', 'POS', 'PRP', 'PRP$', 'RP', 'TO', 'UH', 'WDT', 'WP', 'WP$', 'WRB'}
@@ -137,36 +137,39 @@ def parse_file(args):
 	_idx_words = 0
 	_exc_words = 0
 	
-	pattern = re.compile(r'[\W_]+')			# compile pattern once, use it every time (If includes a non-letter character)
-	docid = re.sub(r'\.txt$', '', file)		# Document's ID -String-
-	existing_lemmas = {}					# Dictionary with the document's lemmas
+	pattern = re.compile(r'[\W_]+')								# compile pattern once, use it every time (If includes a non-letter character)
+	docid = re.sub(r'\.txt$', '', file)							# Document's ID -String-
+	existing_lemmas = {}										# Dictionary with the document's lemmas
 	
 	with open(input_dir + file, "r") as fh:
 		
 		tick = time.time()
 		print "Pid: " + str(os.getpid()) + " processing: " + input_dir + file,
 
-		word_cnt = 0 		# Our inverted index would map words to document names but, we also want to support phrase queries: queries for not only words, but words in a specific sequence => We need to know the order of appearance.
+		word_cnt = 0 		"""Our inverted index would map words to document names but, 
+					we also want to support phrase queries: queries for not only words, but words in a specific sequence => 
+					We need to know the order of appearance."""
 
 		for line in fh:
 			for word, pos in pos_tag(wp_tokenizer.tokenize(line.lower().strip())):					
 				if (
-					pos in CLOSED_TAGS or					# search the closed tag set O(1)
-					pattern.search(word) or					# If includes a non-letter character
-					word in stop_words						# search for stop words O(1)
+					pos in CLOSED_TAGS or						# search the closed tag set O(1)
+					pattern.search(word) or						# If includes a non-letter character
+					word in stop_words							# search for stop words O(1)
 				):
-					_exc_words += 1							# Increment the local copy of excluded words
+					_exc_words += 1								# Increment the local copy of excluded words
 					continue
 				
-				pos = 'v' if (pos.startswith('VB')) else 'n'	# If current term's appearance is verb related then the POS lemmatizer should be verb ('v'), otherwise ('n')
+				pos = 'v' if (pos.startswith('VB')) else 'n'	# If current term's appearance is verb related then 
+																# the POS lemmatizer should be verb ('v'), otherwise ('n')
 				lemma = wnl_lemmatizer.lemmatize(word, pos)		# Stemming/Lemmatization
 
 				if (lemma not in existing_lemmas):
 					existing_lemmas[lemma] = []
 
-				existing_lemmas[lemma].append(word_cnt)		# Keep lemma's current position
-				word_cnt 	+= 1							# Increment the position pointer by 1
-				_idx_words 	+= 1							# Increment the local copy of indexed words count
+				existing_lemmas[lemma].append(word_cnt)			# Keep lemma's current position
+				word_cnt 	+= 1								# Increment the position pointer by 1
+				_idx_words 	+= 1								# Increment the local copy of indexed words count
 
 
 		# Update the Inverted File structure with current document information
@@ -179,8 +182,8 @@ def parse_file(args):
 		
 if (__name__ == "__main__") :
 
-	argParser = set_argParser()				# The argument parser instance
-	line_args = check_arguments(argParser)	# Check and redefine, if necessary, the given line arguments 
+	argParser = set_argParser()									# The argument parser instance
+	line_args = check_arguments(argParser)						# Check and redefine, if necessary, the given line arguments 
 		
 	# -------------------------------------------------------------------------------
 	# Text File Parsing
@@ -216,7 +219,7 @@ if (__name__ == "__main__") :
 	
 	# -------------------------------------------------------------------------------
 
-	calculate_tfidf()				# Enrich the Inverted File structure with the Tf*IDf information
-	export_output(line_args)		# Export the Inverted File structure to a JSON file
+	calculate_tfidf()										# Enrich the Inverted File structure with the Tf*IDf information
+	export_output(line_args)								# Export the Inverted File structure to a JSON file
 
 	sys.exit(0)
