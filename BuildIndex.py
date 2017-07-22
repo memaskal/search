@@ -9,30 +9,31 @@ import json
 import time
 import argparse
 
+from multiprocessing import Pool, Manager	# Multiprocessing
+
 from nltk import pos_tag
 from nltk.corpus import stopwords
 from nltk.tokenize import WordPunctTokenizer
 from nltk.stem.wordnet import WordNetLemmatizer
 
 
-
-wp_tokenizer = WordPunctTokenizer()			# Tokenizer instance
-wnl_lemmatizer = WordNetLemmatizer()		# Wordnet Lemmatizer instance
-
 # English stop words list to set
 stop_words = set(stopwords.words('english'))
 
+# shared memory objects
 inverted_file = {}							# The Inverted File data structure
+inv_lock = None
+
+wp_tokenizer = WordPunctTokenizer()			# Tokenizer instance
+wnl_lemmatizer = WordNetLemmatizer()		# Wordnet Lemmatizer instance
 
 total_doc_cnt = 0							# Total number of indexed documents
 indexed_words = 0							# Total (corpus) number of indexed terms
 excluded_words = 0							# Total (corpus) number of exluded terms
 
 # closed tag set http://www.infogistics.com/tagset.html
-CLOSED_TAGS = {'CD', 'CC', 'DT', 'EX', 'IN',
-			   'LS', 'MD', 'PDT', 'POS', 'PRP',
-			   'PRP$', 'RP', 'TO', 'UH', 'WDT',
-			   'WP', 'WP$', 'WRB'}
+CLOSED_TAGS = {'CD', 'CC', 'DT', 'EX', 'IN', 'LS', 'MD', 'PDT', 'POS', 'PRP', 'PRP$', 'RP', 'TO', 'UH', 'WDT', 'WP', 'WP$', 'WRB'}
+
 
 def set_argParser():
 	""" The build_index script's arguments presentation method."""
@@ -66,10 +67,11 @@ def check_arguments(argParser):
 
 def export_output(line_args):
 	""" Export the Inverted File structure to a JSON file."""
+	global inverted_file
 	# http://stackoverflow.com/questions/12309269/how-do-i-write-json-data-to-a-file-in-python
 	json_file = line_args.output_dir + 'inverted_file.txt'
 	with open(json_file, 'w') as fh:
-		json.dump(inverted_file, fh)
+		json.dump(inverted_file.copy(), fh)
 
 
 
@@ -89,79 +91,125 @@ def calculate_tfidf():
 
 
 
-def update_inverted_index(existing_lemmas):
+def update_inverted_index(existing_lemmas, docid):
 	""" Update the Inverted File structure.."""
-	global inverted_file
+	global inverted_file, inv_lock
+	
+	# acquire shared lock
+	inv_lock.acquire()
+	inv_local = inverted_file.copy()
 
 	for lemma in existing_lemmas.keys():
-		if(lemma not in inverted_file.keys()):
+		if(lemma not in inv_local.keys()):
 			# The following labels are exported per each term to the JSON file => For compactness, we have to keep them short.
 			# tdc: Total document frequency in corpus
 			# twc: Total word/term frequency in corpus
 			#  il: Word/Term's Inverted List
-			inverted_file[lemma] = {}
-			inverted_file[lemma]['tdc'] = 1
-			inverted_file[lemma]['twc'] = len(existing_lemmas[lemma])
-			inverted_file[lemma]['il'] = {}
+			inv_local[lemma] = {}
+			inv_local[lemma]['tdc'] = 1
+			inv_local[lemma]['twc'] = len(existing_lemmas[lemma])
+			inv_local[lemma]['il'] = {}
 		else :
-			inverted_file[lemma]['tdc'] += 1
-			inverted_file[lemma]['twc'] += len(existing_lemmas[lemma])
+			inv_local[lemma]['tdc'] += 1
+			inv_local[lemma]['twc'] += len(existing_lemmas[lemma])
 
 		# Inverted List subdictionary structure:
 		#    <key>    :                              <value>
 		# Document id : (Term's frequency in current document, [Term's order of appearance list])
-		inverted_file[lemma]['il'][docid] = [len(existing_lemmas[lemma]), existing_lemmas[lemma]]
+		inv_local[lemma]['il'][docid] = [len(existing_lemmas[lemma]), existing_lemmas[lemma]]
+	
+	inverted_file.update(inv_local)
+	# release shared lock
+	inv_lock.release()
+
+		
+
+def parse_file(args):
+	""" Parse a single file object """
+	# unpack arguments
+	input_dir, file = args
+	
+	# local counter copies 
+	_idx_words = 0
+	_exc_words = 0
+	
+	pattern = re.compile(r'[\W_]+')			# compile pattern once, use it every time (If includes a non-letter character)
+	docid = re.sub(r'\.txt$', '', file)		# Document's ID -String-
+	existing_lemmas = {}					# Dictionary with the document's lemmas
+	
+	with open(input_dir + file, "r") as fh:
+		
+		tick = time.time()
+		print "Pid: " + str(os.getpid()) + " processing: " + input_dir + file,
+
+		word_cnt = 0 		# Our inverted index would map words to document names but, we also want to support phrase queries: queries for not only words, but words in a specific sequence => We need to know the order of appearance.
+
+		for line in fh:
+			for word, pos in pos_tag(wp_tokenizer.tokenize(line.lower().strip())):					
+				if (
+					pos in CLOSED_TAGS or					# search the closed tag set O(1)
+					pattern.search(word) or					# If includes a non-letter character
+					word in stop_words						# search for stop words O(1)
+				):
+					_exc_words += 1							# Increment the local copy of excluded words
+					continue
+				
+				pos = 'v' if (pos.startswith('VB')) else 'n'	# If current term's appearance is verb related then the POS lemmatizer should be verb ('v'), otherwise ('n')
+				lemma = wnl_lemmatizer.lemmatize(word, pos)		# Stemming/Lemmatization
+
+				if (lemma not in existing_lemmas):
+					existing_lemmas[lemma] = []
+
+				existing_lemmas[lemma].append(word_cnt)		# Keep lemma's current position
+				word_cnt 	+= 1							# Increment the position pointer by 1
+				_idx_words 	+= 1							# Increment the local copy of indexed words count
 
 
+		# Update the Inverted File structure with current document information
+		update_inverted_index(existing_lemmas, docid)
+		
+		print "({0:>6.2f} sec)".format(time.time() - tick)
+		return (_idx_words, _exc_words)
 
+		
+		
 if (__name__ == "__main__") :
+
 	argParser = set_argParser()				# The argument parser instance
 	line_args = check_arguments(argParser)	# Check and redefine, if necessary, the given line arguments 
-	
-	pattern = re.compile(r'[\W_]+')			#compile pattern once, use it every time (If includes a non-letter character)
-	
+		
 	# -------------------------------------------------------------------------------
 	# Text File Parsing
-	# -----------------
-	for file in os.listdir(line_args.input_dir):
-		if (not(file.endswith(".txt"))):		# Skip anything but .txt files
-			continue
-
-		docid = re.sub(r'\.txt$', '', file)		# Document's ID -String-
-		existing_lemmas = {}					# Dictionary with the document's lemmas
-		total_doc_cnt += 1						# Increment the total number of processed documents
-
-		with open(line_args.input_dir + file, "r") as fh:
-			tick = time.time()
-			print "Processing: " + line_args.input_dir + file,
-
-			word_cnt = 0 		# Our inverted index would map words to document names but, we also want to support phrase queries: queries for not only words, but words in a specific sequence => We need to know the order of appearance.
-
-			for line in fh:
-				for word, pos in pos_tag(wp_tokenizer.tokenize(line.lower().strip())):					
-					if (
-						pos in CLOSED_TAGS or				# search the closed tag set O(1)
-						pattern.search(word) or				# If includes a non-letter character
-						word in stop_words					# search for stop words O(1)
-					):
-						excluded_words += 1
-						continue
-					
-					pos = 'v' if (pos.startswith('VB')) else 'n'	# If current term's appearance is verb related then the POS lemmatizer should be verb ('v'), otherwise ('n')
-					lemma = wnl_lemmatizer.lemmatize(word, pos)		# Stemming/Lemmatization
-
-					if (lemma not in existing_lemmas):
-						existing_lemmas[lemma] = []
-
-					existing_lemmas[lemma].append(word_cnt)		# Keep lemma's current position
-					word_cnt += 1								# Increment the position pointer by 1
-					indexed_words += 1							# Increment the total indexeds words count
-
-
-			# Update the Inverted File structure with current document information
-			update_inverted_index(existing_lemmas)
-
-			print "({0:>6.2f} sec)".format(time.time() - tick)
+	# -----------------	
+	
+	#skip non txt files
+	files = [(line_args.input_dir, file) for file in os.listdir(line_args.input_dir) if file.endswith(".txt")] 
+		
+	# Set the number of files
+	total_doc_cnt = len(files)															
+	
+	# create a new manager object for the shared dictionary, lock
+	m = Manager()
+	inverted_file = m.dict()
+	inv_lock = m.Lock()
+	
+	# Create a pool of processes
+	p = Pool(2)
+	
+	# use the async mapping so every process takes of a job and start computing it
+	# we don't care about the order which that happens
+	r = p.map_async(parse_file, files)
+	r.wait()
+	
+	# wait for every child proceess to finish here
+	p.close()
+	p.join()
+	
+	# Increment returned statistics
+	for p in r.get():			
+		indexed_words 	+= p[0]
+		excluded_words 	+= p[1]
+	
 	# -------------------------------------------------------------------------------
 
 	calculate_tfidf()			# Enrich the Inverted File structure with the Tf*IDf information
