@@ -21,8 +21,8 @@ from nltk.stem.wordnet import WordNetLemmatizer
 stop_words = set(stopwords.words('english'))
 
 # shared memory objects
-inverted_file = {}										# The Inverted File data structure
-inv_lock = None
+inverted_file = None									# The Inverted File data structure
+inv_lock = None											# The data structure lock
 
 wp_tokenizer = WordPunctTokenizer()						# Tokenizer instance
 wnl_lemmatizer = WordNetLemmatizer()					# Wordnet Lemmatizer instance
@@ -63,17 +63,17 @@ def check_arguments(argParser):
 	
 	# processes
 	line_args.process_cnt = int(line_args.process_cnt)
-	if (line_args.process_cnt == None or line_args.process_cnt == 0):
+	if (line_args.process_cnt < 1):
 		line_args.process_cnt = 1
 	return line_args
 
 
 
-def export_output(line_args):
+def export_output(output_dir):
 	""" Export the Inverted File structure to a JSON file."""
 	global inverted_file
 	# http://stackoverflow.com/questions/12309269/how-do-i-write-json-data-to-a-file-in-python
-	json_file = line_args.output_dir + 'inverted_file.txt'
+	json_file = output_dir + 'inverted_file.txt'
 	with open(json_file, 'w') as fh:
 		json.dump(inverted_file.copy(), fh)
 
@@ -85,7 +85,7 @@ def calculate_tfidf():
 
 	for lemma in inverted_file.keys():
 		# Inverted document frequency = Total number of documents / Number of documents appeared
-		idf = total_doc_cnt / len(inverted_file[lemma]['il'].keys())
+		idf = total_doc_cnt / len(inverted_file[lemma]['il'])
 
 		for docid in inverted_file[lemma]['il'].keys():
 			# Inverted List subdictionary structure:
@@ -103,8 +103,8 @@ def update_inverted_index(existing_lemmas, docid):
 	inv_lock.acquire()
 	inv_local = inverted_file.copy()
 
-	for lemma in existing_lemmas.keys():
-		if(lemma not in inv_local.keys()):
+	for lemma in existing_lemmas:
+		if lemma not in inv_local:
 			# The following labels are exported per each term to the JSON file => For compactness, we have to keep them short.
 			# tdc: Total document frequency in corpus
 			# twc: Total word/term frequency in corpus
@@ -146,9 +146,9 @@ def parse_file(args):
 		tick = time.time()
 		print "Pid: " + str(os.getpid()) + " processing: " + input_dir + file,
 
-		word_cnt = 0 		"""Our inverted index would map words to document names but, 
-					we also want to support phrase queries: queries for not only words, but words in a specific sequence => 
-					We need to know the order of appearance."""
+		word_cnt = 0 		# Our inverted index would map words to document names but, 
+							# we also want to support phrase queries: queries for not only words, but words in a specific sequence => 
+							# We need to know the order of appearance.
 
 		for line in fh:
 			for word, pos in pos_tag(wp_tokenizer.tokenize(line.lower().strip())):					
@@ -189,16 +189,16 @@ if (__name__ == "__main__") :
 	# Text File Parsing
 	# -----------------	
 	
-	#skip non txt files
+	# skip non txt files
 	files = [(line_args.input_dir, file) for file in os.listdir(line_args.input_dir) if file.endswith(".txt")] 
-		
+
 	# Set the number of files
 	total_doc_cnt = len(files)															
 	
 	# create a new manager object for the shared dictionary, lock
 	m = Manager()
-	inverted_file = m.dict()
 	inv_lock = m.Lock()
+	inverted_file = m.dict()
 	
 	# Create a pool of processes
 	p = Pool(line_args.process_cnt)
@@ -206,7 +206,6 @@ if (__name__ == "__main__") :
 	# use the async mapping so every process takes of a job and start computing it
 	# we don't care about the order which that happens
 	r = p.map_async(parse_file, files)
-	r.wait()
 	
 	# wait for every child proceess to finish here
 	p.close()
@@ -220,6 +219,6 @@ if (__name__ == "__main__") :
 	# -------------------------------------------------------------------------------
 
 	calculate_tfidf()										# Enrich the Inverted File structure with the Tf*IDf information
-	export_output(line_args)								# Export the Inverted File structure to a JSON file
+	export_output(line_args.output_dir)						# Export the Inverted File structure to a JSON file
 
 	sys.exit(0)
