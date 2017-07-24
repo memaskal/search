@@ -5,7 +5,7 @@
 import os
 import re
 import sys
-import json
+import pickle
 import time
 import argparse
 
@@ -70,29 +70,33 @@ def check_arguments(argParser):
 
 
 def export_output(output_dir):
-	""" Export the Inverted File structure to a JSON file."""
+	""" Export the Inverted File structure to a picle file."""
 	global inverted_file
-	# http://stackoverflow.com/questions/12309269/how-do-i-write-json-data-to-a-file-in-python
-	json_file = output_dir + 'inverted_file.txt'
-	with open(json_file, 'w') as fh:
-		json.dump(inverted_file.copy(), fh)
+	
+	filename = output_dir + 'inverted_file.pickle'
+	with open(filename, 'wb') as handle:
+		pickle.dump(inverted_file.copy(), handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 
 def calculate_tfidf():
 	""" Calculate the TF * IDF per lemma."""
 	global inverted_file
-
-	for lemma in inverted_file.keys():
+	
+	# get local copy of dictionary
+	inv_local = inverted_file.copy()	
+	for lemma in inv_local:
 		# Inverted document frequency = Total number of documents / Number of documents appeared
-		idf = total_doc_cnt / len(inverted_file[lemma]['il'])
+		idf = total_doc_cnt / len(inv_local[lemma]['il'])
 
-		for docid in inverted_file[lemma]['il'].keys():
+		for docid in inv_local[lemma]['il']:
 			# Inverted List subdictionary structure:
 			#    <key>    :                              <value>
 			# Document id : (Term's frequency, [Term's order of appearance list], Tf * IDf)
-			inverted_file[lemma]['il'][docid].append(inverted_file[lemma]['il'][docid][0] * idf)
-
+			inv_local[lemma]['il'][docid].append(inv_local[lemma]['il'][docid][0] * idf)
+	
+	#set the new dictionary
+	inverted_file = inv_local
 
 
 def update_inverted_index(existing_lemmas, docid):
@@ -168,6 +172,7 @@ def parse_file(args):
 					existing_lemmas[lemma] = []
 
 				existing_lemmas[lemma].append(word_cnt)			# Keep lemma's current position
+				
 				word_cnt 	+= 1								# Increment the position pointer by 1
 				_idx_words 	+= 1								# Increment the local copy of indexed words count
 
@@ -219,6 +224,6 @@ if (__name__ == "__main__") :
 	# -------------------------------------------------------------------------------
 
 	calculate_tfidf()										# Enrich the Inverted File structure with the Tf*IDf information
-	export_output(line_args.output_dir)						# Export the Inverted File structure to a JSON file
+	export_output(line_args.output_dir)						# Export the Inverted File structure to a picle file
 
 	sys.exit(0)

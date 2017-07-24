@@ -7,7 +7,7 @@
 import os
 import re
 import sys
-import json
+import pickle
 import time
 import argparse
 
@@ -28,7 +28,7 @@ stop_words = stopwords.words('english')		# English stop words list
 def set_argParser():
 	""" The build_index script's arguments presentation method."""
 	argParser = argparse.ArgumentParser(description="Script's objective is to query the Inverted File constructed previously after executing BuildIndex script.")
-	argParser.add_argument('-I', '--input_file', type=str, default=os.path.dirname(os.path.realpath(__file__)) + os.sep + 'inverted_file.txt', help='The file path of the Inverted File constructed from BuildIndex. Default:' + os.path.dirname(os.path.realpath(__file__)) + os.sep + 'inverted_file.txt')
+	argParser.add_argument('-I', '--input_file', type=str, default=os.path.dirname(os.path.realpath(__file__)) + os.sep + 'inverted_file.pickle', help='The file path of the Inverted File constructed from BuildIndex. Default:' + os.path.dirname(os.path.realpath(__file__)) + os.sep + 'inverted_file.pickle')
 	return argParser
 
 
@@ -42,15 +42,14 @@ def check_arguments(argParser):
 def retrieve_inverted_index(line_args):
 	""" Retrieve the Inverted Index."""
 	global inverted_file		# The Inverted File data structure
-	with open(line_args.input_file, 'r') as fh:
-		# Per each lemma sub-dictionary's included in the inverted files we have already stored: 
+	with open(line_args.input_file, 'rb') as pickle_file:
+    		# Per each lemma sub-dictionary's included in the inverted files we have already stored: 
 		# tdc: Total document frequency in corpus
 		# twc: Total word/term frequency in corpus
 		#  il: Inverted List (sub-dictionary)
 		#     -    <key>    :                        <value>
 		#     - Document id : (Term's frequency, [Term's order of appearance list], Tf * IDf)
-		inverted_file = json.load(fh)
-
+		inverted_file = pickle.load(pickle_file)
 
 
 def ranking_tfidf(func):
