@@ -21,7 +21,7 @@ from nltk.stem.wordnet import WordNetLemmatizer
 inverted_file = {}							# The Inverted File data structure
 wp_tokenizer = WordPunctTokenizer()			# Tokenizer instance
 wnl_lemmatizer = WordNetLemmatizer()		# Wordnet Lemmatizer instance
-stop_words = stopwords.words('english')		# English stop words list
+stop_words = set(stopwords.words('english'))		# English stop words list
 
 
 
@@ -91,6 +91,13 @@ def standard_query(query_lemmas):
 	return standard_query_docs
 
 
+def dgap_decode(positions):
+	""" Decodes a list of positions from dgap encoding """
+	x = list(positions)
+	for i in range(1, len(positions)):
+		x[i] += x[i-1]
+	return x
+
 
 @ranking_tfidf
 def phrase_query(query_lemmas):
@@ -123,12 +130,18 @@ def phrase_query(query_lemmas):
 			if (inverted_file[min_zip[0]]['il'][docid][0] > inverted_file[query_lemmas[i]]['il'][docid][0]):
 				min_zip = init_zipped[i]
 
+		
 		# Replace the relevant position of the lemmas regarding the least appearances lemma's position.
 		# Considering that the lemma 'archive' has the least appearances in this document.
 		# rel_min_zipped: [('project', -2), ('gutenberg', -1), ('archive', 0), ('foundation', 1)]
 		rel_min_zipped = zip(query_lemmas, [i - min_zip[1] for i in range(len(query_lemmas))])
 
-		for pos in inverted_file[min_zip[0]]['il'][docid][1]:
+
+		# Calculate dgap decoding only once
+		invfile_pos_decoded = [dgap_decode(inverted_file[query_lemmas[i]]['il'][docid][1]) for i in range(len(query_lemmas))]
+	
+		# decode dgap encoding
+		for pos in dgap_decode(inverted_file[min_zip[0]]['il'][docid][1]):
 			# Considering that 'archive' term is found in position 91.
 			# lemmas           : project gutenberg archive foundation
 			# relevant position:     -2      -1       0       1
@@ -138,7 +151,8 @@ def phrase_query(query_lemmas):
 
 			# Foreach query's lemma, if the lemma is found in the calculated position we mark it with '1' otherwise the relevant position is set to '0'
 			# If all the checked lemmas, found in the correct calculated positions => This document contain the under checking sequence of terms => Should be retrieved as a valid answer
-			if (reduce(lambda x, y: x + y, [1 if (pos_zipped[i][1] in inverted_file[pos_zipped[i][0]]['il'][docid][1]) else 0 for i in range(len(pos_zipped))]) == len(pos_zipped)):
+			
+			if (reduce(lambda x, y: x + y, [1 if (pos_zipped[i][1] in invfile_pos_decoded[i]) else 0 for i in range(len(pos_zipped))]) == len(pos_zipped)):
 				phrase_query_docs.append(docid)
 				break
 
@@ -161,7 +175,8 @@ def phrase_query(query_lemmas):
 # Himalayans journals
 # ----------------------------------------------
 
-
+# closed tag set http://www.infogistics.com/tagset.html
+CLOSED_TAGS = {'CD', 'CC', 'DT', 'EX', 'IN', 'LS', 'MD', 'PDT', 'POS', 'PRP', 'PRP$', 'RP', 'TO', 'UH', 'WDT', 'WP', 'WP$', 'WRB'}
 
 if (__name__ == "__main__") :
 	argParser = set_argParser()				# The argument parser instance
@@ -169,6 +184,8 @@ if (__name__ == "__main__") :
 
 	retrieve_inverted_index(line_args)		# Retrieve the inverted index
 
+	pattern = re.compile(r'[\W_]+')			# compile pattern once, use it every time (If includes a non-letter character)
+	
 	print
 	print
 	print
@@ -189,25 +206,14 @@ if (__name__ == "__main__") :
 		for word, pos in pos_tag(wp_tokenizer.tokenize(query.lower().strip())):
 			# It is proper to sanitize the query like we sanitized the documents documents when we built the index by stemming all the words, making everything lowercase, removing punctuation and apply the analysis applied while building the index.
 			if(
-				re.search(r'[\W_]+', word) or 	# If includes a non-letter character
-				word in stop_words or			# If this is a stop word
-				# http://stackoverflow.com/questions/15388831/what-are-all-possible-pos-tags-of-nltk
-				#   CC: conjuction, coordinating
-				#   LS: List item marker
-				#   EX: Existential there
-				#   MD: Modal auxiliary
-				#  PDT: Pre-determined
-				#  PRP: Pronoun, personal
-				# PRP$: Pronoun, possesive
-				#  WDT: WH-determiner
-				#   WP: WH-pronoun
-				#  WRB: Wh-adverb
-				pos in ['CC', 'LS', 'EX', 'MD', 'PDT', 'PRP', 'PRP$', 'WDT', 'WP', 'WRB']
+				pos in CLOSED_TAGS or						# search the closed tag set O(1)
+				pattern.search(word) or						# If includes a non-letter character
+				word in stop_words							# search for stop words O(1)
 			):
 				continue
 
 			pos = 'v' if (pos.startswith('VB')) else 'n'	# If current term's appearance is verb related then the POS lemmatizer should be verb ('v'), otherwise ('n')
-			if (word in inverted_file.keys()):
+			if (word in inverted_file):
 				query_lemmas.append(wnl_lemmatizer.lemmatize(word, pos))		# Stemming/Lemmatization
 
 		if (len(query_lemmas) < 1):

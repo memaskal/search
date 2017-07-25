@@ -99,6 +99,11 @@ def calculate_tfidf():
 	inverted_file = inv_local
 
 
+def dGap_encode(positions):
+	""" Transform a list of positions to d_gap encoding """
+	
+
+
 def update_inverted_index(existing_lemmas, docid):
 	""" Update the Inverted File structure.."""
 	global inverted_file, inv_lock
@@ -108,6 +113,7 @@ def update_inverted_index(existing_lemmas, docid):
 	inv_local = inverted_file.copy()
 
 	for lemma in existing_lemmas:
+		exl_length = len(existing_lemmas[lemma])
 		if lemma not in inv_local:
 			# The following labels are exported per each term to the JSON file => For compactness, we have to keep them short.
 			# tdc: Total document frequency in corpus
@@ -115,16 +121,20 @@ def update_inverted_index(existing_lemmas, docid):
 			#  il: Word/Term's Inverted List
 			inv_local[lemma] = {}
 			inv_local[lemma]['tdc'] = 1
-			inv_local[lemma]['twc'] = len(existing_lemmas[lemma])
+			inv_local[lemma]['twc'] = exl_length
 			inv_local[lemma]['il'] = {}
 		else :
 			inv_local[lemma]['tdc'] += 1
-			inv_local[lemma]['twc'] += len(existing_lemmas[lemma])
+			inv_local[lemma]['twc'] += exl_length
 
+		# Encode positions with dgap
+		for i in range(1, exl_length):
+			existing_lemmas[lemma][i] -= existing_lemmas[lemma][i-1]		
+		
 		# Inverted List subdictionary structure:
 		#    <key>    :                              <value>
-		# Document id : (Term's frequency in current document, [Term's order of appearance list])
-		inv_local[lemma]['il'][docid] = [len(existing_lemmas[lemma]), existing_lemmas[lemma]]
+		# Document id : (Term's frequency in current document, [Term's order of appearance list])		
+		inv_local[lemma]['il'][docid] = [exl_length, existing_lemmas[lemma]]
 	
 	inverted_file.update(inv_local)
 	# release shared lock
