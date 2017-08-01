@@ -1,18 +1,24 @@
 #!/usr/bin/python
 # Recomends books on other users prefrences
 
-import os
 import csv
 import pickle
 
 from math import sqrt
+from os import path
 
 # Some random reviews on the books
 reviews = {
 	'Alice' : {'00ws110.txt': 5.0, '8ataw11.txt': 4.5 },
 	'John'	: {'8ataw11.txt': 2.0, 'idiot10.txt': 3.5 },
-	'Bob'	: {'idiot10.txt': 4.0, '8ataw11.txt': 2.0, '1cahe10.txt': 3.0}
+	'Bob'	: {'idiot10.txt': 4.0, '8ataw11.txt': 2.0, '1cahe10.txt': 3.0, '00ws110.txt': 4.0}
 }
+
+# Default books dict path
+books_path = './books.pcl'	
+
+# The books dict structure
+books = {}
 
 
 def load_titles_csv(filename):
@@ -21,7 +27,7 @@ def load_titles_csv(filename):
 	results = {}
 	with open(filename, 'r') as fp:
 		rdr = csv.DictReader(fp, delimiter=',', quotechar='"')
-		for row in rdr:
+		for row in rdr:			
 			# Titles containing stopwords like "The", "A" are split and saved in reverse order 
 			# (example: "Memoirs of Sherlock Holmes, The"). So in the line bellow we
 			# reverse the order again resulting to => "The Memoirs of Sherlock Holmes"
@@ -56,34 +62,45 @@ def load_from_pickle(filename):
 	return results
 
 
+def init(csv_path):
+	global books, books_path
+	# Load the book dict, if it exists or else
+	# parse the csv file containing the book titles
+	# and save it to pickle for another time
+	
+	if path.exists(books_path):
+		books = load_from_pickle(books_path)
+	else:
+		books = load_titles_csv(csv_path)
+		save_to_pickle(books_path, books)
+	
 
 def sim_pearson(prefs, p1, p2):
 	""" Returns the Pearson correlation coefficient for p1 and p2 """
-	#Get the list of mutually rated items
+	
+	# Get the list of mutually rated items
 	si = {}
 	for item in prefs[p1]:
 		if item in prefs[p2]: 
 			si[item] = 1
 	
-	#if they are no rating in common, return 0
-	if len(si) == 0:
+	# if they are no rating in common, return 0
+	n = len(si)
+	if n == 0:
 		return 0
 
-	#sum calculations
-	n = len(si)
-
-	#sum of all preferences
+	# sum of all preferences
 	sum1 = sum([prefs[p1][it] for it in si])
 	sum2 = sum([prefs[p2][it] for it in si])
 
-	#Sum of the squares
+	# Sum of the squares
 	sum1Sq = sum([pow(prefs[p1][it], 2) for it in si])
 	sum2Sq = sum([pow(prefs[p2][it], 2) for it in si])
 
-	#Sum of the products
+	# Sum of the products
 	pSum = sum([prefs[p1][it] * prefs[p2][it] for it in si])
 
-	#Calculate r (Pearson score)
+	# Calculate r (Pearson score)
 	num = pSum - (sum1 * sum2 / n)
 	den = sqrt((sum1Sq - pow(sum1,2) / n) * (sum2Sq - pow(sum2, 2)/n))
 	if den == 0:
@@ -93,36 +110,36 @@ def sim_pearson(prefs, p1, p2):
 	return r
 
 
-#Gets recommendations for a person by using a weighted average
-#of every other user's rankings
 def getRecommendations(prefs, person):
-	
+	""" Gets recommendations for a person by using a weighted average 
+		of every other user's rankings """
+		
 	totals = {}
 	simSums = {}
 
 	for other in prefs:
-		#don't compare me to myself
 		if other == person:
 			continue
+			
 		sim = sim_pearson(prefs, person, other)
-
-		#ignore scores of zero or lower
+		# ignore scores of zero or lower
 		if sim <= 0: 
 			continue
+		
 		for item in prefs[other]:
-			#only score books i haven't seen yet
+			# only score books i haven't seen yet
 			if item not in prefs[person] or prefs[person][item] == 0:
-				#Similarity * score
+				# Similarity * score
 				totals.setdefault(item, 0)
 				totals[item] += prefs[other][item] * sim
-				#Sum of similarities
+				# Sum of similarities
 				simSums.setdefault(item, 0)
 				simSums[item] += sim
 
-	#Create the normalized list
+	# Create the normalized list
 	rankings = [(total/simSums[item], item) for item, total in totals.items()]
 
-	#Return the sorted list
+	# Return the sorted list
 	rankings.sort(reverse=True)
 	return rankings
 
@@ -130,27 +147,19 @@ def getRecommendations(prefs, person):
 
 if (__name__ == "__main__"):
 	
-	books_path = './books.pcl'	
-	# Load the book dict, if it exists or else
-	# parse the csv file containing the book titles
-	# and save it to pickle for another time
+	# load the books dictionary
+	init('../books/master_list.csv')
 	
-	if os.path.exists(books_path):
-		books = load_from_pickle('books.pcl')
-	else:
-		books = load_titles_csv('../books/master_list.csv')
-		save_to_pickle(books_path, books)
+	# Get all the recommendations with a score greater than 2.0
+	r = [x for x in getRecommendations(reviews, 'John') if x[0] > 2.0]
 	
-	
-	r = getRecommendations(reviews, 'John')
 	if len(r) == 0:
 		print 'No recommendations for you :('
 	else:
 		print 'These books are highly recommended for you:'
 	
 	for score, book_id in r:
-		if score > 2.5:
-			print books[book_id]['Title'] + ', by ' + books[book_id]['Author']
+		print books[book_id]['Title'] + ', by ' + books[book_id]['Author']
 	
 	
 
