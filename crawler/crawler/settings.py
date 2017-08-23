@@ -14,6 +14,11 @@ BOT_NAME = 'crawler'
 SPIDER_MODULES = ['crawler.spiders']
 NEWSPIDER_MODULE = 'crawler.spiders'
 
+# Database environment values 
+MYSQL_HOST = 'localhost'
+MYSQL_DBNAME = 'crawler'
+MYSQL_USER = 'root'
+MYSQL_PASSWD = 'root'
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'crawler (+http://www.yourdomain.com)'
