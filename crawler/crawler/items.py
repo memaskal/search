@@ -8,7 +8,11 @@
 import scrapy
 
 
-class CrawlerItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+class Book(scrapy.Item):
+	id = scrapy.Field()
+	title = scrapy.Field()
+	author = scrapy.Field()
+	text = scrapy.Field()
+	last_updated = scrapy.Field(serializer=str)
+	
+	
