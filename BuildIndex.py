@@ -128,7 +128,7 @@ def update_inverted_index(existing_lemmas, docid):
 			inv_local[lemma]['twc'] += exl_length
 
 		# Encode positions with dgap
-		for i in range(1, exl_length):
+		for i in range(exl_length - 1, 0, -1):
 			existing_lemmas[lemma][i] -= existing_lemmas[lemma][i-1]		
 		
 		# Inverted List subdictionary structure:
