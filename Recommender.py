@@ -148,7 +148,7 @@ def getRecommendations(prefs, person):
 if (__name__ == "__main__"):
 	
 	# load the books dictionary
-	init('../books/master_list.csv')
+	init('./books/master_list.csv')
 	
 	# Get all the recommendations with a score greater than 2.0
 	r = [x for x in getRecommendations(reviews, 'John') if x[0] > 2.0]
