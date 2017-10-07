@@ -1,59 +1,76 @@
-* The implementation follows the general idea of the below link:
-	> http://aakashjapi.com/fuckin-search-engines-how-do-they-work/
+## Synopsis
 
-* There are 3 major stages in developing a search engine:
-	1) Finding/Crawling the Data
-	2) Building the index,
-	3) Using the index to answer queries
-	- On top of this, we can add result ranking (tf-idf, PageRank, etc), query/document classification and maybe some Machine Learning to keep track of user's past queries and selected results to improve the search engine's  performance. 
-	- Download Project Gutenbergs TOP 600 April's 2003 e-books in .txt format from the undermentioned links:
-		http://www.gutenberg.org/wiki/Gutenberg:The_CD_and_DVD_Project:			(The CD and DVD Project)
-		ftp://ftp.ibiblio.org/pub/docs/books/gutenberg/1/1/2/2/11220/			(August 2003 CD)
+This project started as a simple search engine following the general idea of this [blog post](http://aakashjapi.com/fuckin-search-engines-how-do-they-work/). A starting point implementation was given in Python and can be found [here](./original-src). The task was to make fitted changes to optimize the given implementation. A walktrhough of all the changes are described in the [report.pdf](./report.pdf), currently in greek.  
 
-* You can run each script with --help
-	$ ./Desktop/results/se/BuildIndex.py --help
-	usage: BuildIndex.py [-h] [-I INPUT_DIR] [-O OUTPUT_DIR]
+## Search engines
 
-	Script's objective is to assembly the inverted index of a given document
-	collection.
+There are 3 major stages in developing a search engine:
+1) Finding/Crawling the Data
+2) Building the index
+3) Using the index to answer queries
 
-	optional arguments:
-	  -h, --help            show this help message and exit
-	  -I INPUT_DIR, --input_dir INPUT_DIR
-	                        The directory path of the document collection.
-	                        Default:/home/gpispi/Desktop/results/se/books
-	  -O OUTPUT_DIR, --output_dir OUTPUT_DIR
-	                        The output directory path where the inverted file is
-	                        going to be exported in JSON format. Default:
-	                        (/home/gpispi/Desktop/results/se
+> On top of this, we can add result ranking (tf-idf, PageRank, etc), query/document classification and maybe some Machine Learning to keep track of user's past queries and selected results to improve the search engine's performance.
 
-	$ ./QueryIndex.py --help
-	usage: QueryIindex.py [-h] [-I INPUT_FILE]
+### Indexer
 
-	Script's objective is to query the Inverted File constructed previously after
-	executing BuildIndex script.
+The Indexer was benchmarked using a small random [book](./books) subset from the Project Gutenberg collection. The improvments made to the Indexer are:
 
-	optional arguments:
-	  -h, --help            show this help message and exit
-	  -I INPUT_FILE, --input_file INPUT_FILE
-	                        The file path of the Inverted File constructed from
-	                        BuildIndex. Default:/home/gpispi/Desktop/results/se/in
-	                        verted_file.txt
+1) Static lists to sets conversion, for faster searches. *Speedup:* +5%
+2) Precompiled Regex, for faster matches. *Speedup:* +2%
+3) Stopword removal using [Modified Penn Treebank Tag-Set2](http://www.infogistics.com/tagset.html) closed class 
+categories. *Inverted Index size:* -5%
+4) Multi-process parallel Indexer with 2 worker processes. *Speedup:* +50%
+5) Serialize inverted index as Pickle file. *Inverted Index size:* -30%
+6) Apply D-Gap encoding. *Inverted Index size:* -25%
 
-* Usefull links:
-	- Nltk installation and usage:
-		> https://www.quora.com/How-do-I-install-NLTK-on-Ubuntu
-		> http://stackoverflow.com/questions/26693736/nltk-and-stopwords-fail-lookuperror
-		> http://www.nltk.org/howto/wordnet.html
-		> https://pythonprogramming.net/wordnet-nltk-tutorial/
-	- Search Engines General:
-		> https://www.reddit.com/r/learnpython/comments/3ikd9f/creating_a_search_engine_in_python/
-		> http://infolab.stanford.edu/%7Ebackrub/google.html
-		> http://www.zackgrossbart.com/hackito/search-engine-python/
-		> https://pythonformachinelearning.wordpress.com/
+The averall perfomance over the old implementation is for (P = 2) worker processes is a 2.68 speedup and a -52% reduction in the Inverted Index file size. To get help on the Indexer sub system's  execution arguments, type the following command in the projects' directory:
+
+```bash
+$ python BuildIndex.py --help
+```
+
+### Query
+
+The Query sub system, uses the inverted Index, and supports standard and phrase queries, with tf-idf rankings. To get help on the Query sub system's execution arguments, type the following command in the projects' directory:
+
+```bash
+$ python QueryIndex.py --help
+```
+
+### Recommender
+
+A proof of concept, Recommender sub-system, was created for the Gutenberg collection's books. The first, is indepedent of this implementation, but can easily be addapted to work with the Query sub-system. The provided recommendations, are based on other users' ratings on the books (collaborative filtering) . The similarity of the users, is calculated using the Pearson correlation coefficient. 
+
+The books' ratings were created randomly and a book index was created by parsing the master_list.csv  located in the books directory. The last, contains the title, author, book_id etc. information for all the downloaded books. To execute the Recommender sub-system type the following command in the projects’ directory:
+
+```bash
+$ python Recommender.py
+```
+
+### Crawler
+
+The crawler sub-system uses the [Scrapy](https://scrapy.org/) web crawling framework. A custom spider was created, to parse the project Gutenberg's website and download books. A custom Book item was created to represent the new entities and a MySQL pipeline was used to insert the books in a database. The books later, can be inputed to the Indexer with some minor changes.
+
+The database credentials as well as the crawler's configuration are located in the crawler/settings.py configuration file. To run the crawler, execute the following commands in the project's directory:
+
+```bash
+$ cd crawler
+$ srcapy crawl gutenberg
+# Setting crawler's max pages = 3 
+$ srcapy crawl gutenberg -a maxpages=3
+```
 
 
-
-
-
-
+## Useful Links
+* Nltk installation and usage:
+    - https://www.quora.com/How-do-I-install-NLTK-on-Ubuntu
+    - http://stackoverflow.com/questions/26693736/nltk-and-stopwords-fail-lookuperror
+    - http://www.nltk.org/howto/wordnet.html
+    - https://pythonprogramming.net/wordnet-nltk-tutorial/
+* Search Engines General:
+    - https://www.reddit.com/r/learnpython/comments/3ikd9f/creating_a_search_engine_in_python/
+    - http://infolab.stanford.edu/%7Ebackrub/google.html
+    - http://www.zackgrossbart.com/hackito/search-engine-python/
+    - https://pythonformachinelearning.wordpress.com/
+* Project Gutenbergs TOP 600 April's 2003 e-books in .txt format:
+    - ftp://ftp.ibiblio.org/pub/docs/books/gutenberg/1/1/2/2/11220/	(August 2003 CD)
