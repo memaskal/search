@@ -99,10 +99,6 @@ def calculate_tfidf():
 	inverted_file = inv_local
 
 
-def dGap_encode(positions):
-	""" Transform a list of positions to d_gap encoding """
-	
-
 
 def update_inverted_index(existing_lemmas, docid):
 	""" Update the Inverted File structure.."""
