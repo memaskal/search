@@ -23,7 +23,7 @@ categories. *Inverted Index size:* -5%
 5) Serialize inverted index as Pickle file. *Inverted Index size:* -30%
 6) Apply D-Gap encoding. *Inverted Index size:* -25%
 
-The overall performance over the old implementation is for (P = 2) worker processes is a 2.68 speedup and a -52% reduction in the Inverted Index file size. To get help on the Indexer sub system’s execution arguments, type the following command in the projects' directory:
+The overall performance for (P = 2) worker processes, is a 2.68 speedup and a -52% reduction in the Inverted Index file size, compared to the original implementation. To get help on the Indexer sub system’s execution arguments, type the following command in the projects' directory:
 
 ```bash
 $ python BuildIndex.py --help
