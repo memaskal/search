@@ -39,7 +39,7 @@ def set_argParser():
 	""" The build_index script's arguments presentation method."""
 	argParser = argparse.ArgumentParser(description="Script's objective is to assembly the inverted index of a given document collection.")
 	argParser.add_argument('-I', '--input_dir', type=str, default=os.path.dirname(os.path.realpath(__file__)) + os.sep + 'books', help='The directory path of the document collection. Default:' + os.path.dirname(os.path.realpath(__file__)) + os.sep + 'books')
-	argParser.add_argument('-O', '--output_dir', default=os.path.dirname(os.path.realpath(__file__)), type=str, help='The output directory path where the inverted file is going to be exported in JSON format. Default: (' + os.path.dirname(os.path.realpath(__file__)))
+	argParser.add_argument('-O', '--output_dir', default=os.path.dirname(os.path.realpath(__file__)), type=str, help='The output directory path where the inverted file is going to be exported in Pickle format. Default: (' + os.path.dirname(os.path.realpath(__file__)))
 	argParser.add_argument('-P', '--process_cnt', default=1, type=int, help='The number of worker processes. Default: 1')
 	return argParser
 
@@ -111,7 +111,7 @@ def update_inverted_index(existing_lemmas, docid):
 	for lemma in existing_lemmas:
 		exl_length = len(existing_lemmas[lemma])
 		if lemma not in inv_local:
-			# The following labels are exported per each term to the JSON file => For compactness, we have to keep them short.
+			# The following labels are exported per each term to the Pickle file => For compactness, we have to keep them short.
 			# tdc: Total document frequency in corpus
 			# twc: Total word/term frequency in corpus
 			#  il: Word/Term's Inverted List
