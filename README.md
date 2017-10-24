@@ -1,4 +1,4 @@
-## Synopsis
+## Simple search engine with TF-IDF ranking
 
 This project started as a simple search engine following the general idea of this [blog post](http://aakashjapi.com/fuckin-search-engines-how-do-they-work/). A starting point implementation was given in Python and can be found [here](./original-src). The task was to make fitted changes to optimize the given implementation. A walkthrough of all the changes are described in the [report.pdf](./report.pdf), currently in Greek.  
 
